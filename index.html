@@ -2100,8 +2100,71 @@
         });
 
         // Event Listeners
-        document.addEventListener('DOMContentLoaded', async function() {
-            try {
+    document.addEventListener('DOMContentLoaded', () => {
+    initializeRecaptcha();
+
+    const sendOtpBtn = document.getElementById('sendOtpBtn');
+    const phoneInput = document.getElementById('phoneNumber');
+    const otpVerificationContainer = document.getElementById('otpVerificationContainer');
+    const phoneAuthContainer = document.getElementById('phoneAuthContainer');
+
+    sendOtpBtn.addEventListener('click', async () => {
+        const phoneNumber = phoneInput.value.trim();
+        if (!/^\d{10}$/.test(phoneNumber)) {
+            showToast("Please enter a valid 10-digit phone number", 'warning');
+            return;
+        }
+
+        const fullPhone = '+91' + phoneNumber;
+        showLoading('Sending OTP...');
+
+        try {
+            const appVerifier = window.recaptchaVerifier;
+            const result = await signInWithPhoneNumber(auth, fullPhone, appVerifier);
+            confirmationResult = result;
+
+            hideLoading();
+            showToast("OTP sent successfully!", 'success');
+            phoneAuthContainer.classList.add('hidden');
+            otpVerificationContainer.classList.remove('hidden');
+        } catch (error) {
+            hideLoading();
+            showToast("Failed to send OTP. Try again.", 'error');
+            console.error('Send OTP Error:', error);
+        }
+    });
+
+    document.getElementById('verifyOtpBtn').addEventListener('click', async () => {
+        const code = document.getElementById('otpCode').value.trim();
+        if (!/^\d{6}$/.test(code)) {
+            showToast("Please enter a valid 6-digit OTP", 'warning');
+            return;
+        }
+
+        showLoading('Verifying OTP...');
+
+        try {
+            const result = await confirmationResult.confirm(code);
+            currentUser = result.user;
+            hideLoading();
+            showToast("Login successful!", 'success');
+
+            document.getElementById('authContainer').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+        } catch (error) {
+            hideLoading();
+            showToast("Invalid OTP. Try again.", 'error');
+            console.error('Verify OTP Error:', error);
+        }
+    });
+
+    document.getElementById('resendOtpBtn').addEventListener('click', () => {
+        window.recaptchaVerifier.clear();
+        initializeRecaptcha();
+        otpVerificationContainer.classList.add('hidden');
+        phoneAuthContainer.classList.remove('hidden');
+    });
+});
                 // Initialize IndexedDB
                 await initDB();
                 
