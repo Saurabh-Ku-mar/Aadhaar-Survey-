@@ -1,0 +1,1862 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BLO Assistant - Booth Level Officer Tools</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/heroicons@2.0.18/24/outline/index.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    
+    <!-- OCR Library -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
+    
+    <!-- PDF Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
+    <!-- Image Processing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+    
+    <style>
+        .dark {
+            color-scheme: dark;
+        }
+        .cropper-container {
+            max-height: 400px;
+        }
+        .chat-bubble {
+            animation: slideUp 0.3s ease-out;
+        }
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+    <!-- Navigation -->
+    <nav class="bg-white dark:bg-gray-800 shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <i class="fas fa-vote-yea text-blue-600 text-2xl mr-3"></i>
+                    <span class="text-xl font-bold text-gray-900 dark:text-white">BLO Assistant</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button id="themeToggle" class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
+                        <i class="fas fa-moon dark:hidden"></i>
+                        <i class="fas fa-sun hidden dark:inline"></i>
+                    </button>
+                    <div id="userInfo" class="hidden items-center space-x-2">
+                        <img id="userPhoto" class="w-8 h-8 rounded-full" alt="User">
+                        <span id="userName" class="text-sm font-medium text-gray-700 dark:text-gray-300"></span>
+                        <button id="logoutBtn" class="text-sm text-red-600 hover:text-red-800">Logout</button>
+                    </div>
+                    <button id="loginBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                        Login
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Login Modal -->
+        <div id="loginModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
+                <h2 class="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Login to BLO Assistant</h2>
+                <div class="space-y-4">
+                    <button id="googleSignIn" class="w-full bg-red-600 text-white py-3 rounded-lg hover:bg-red-700 flex items-center justify-center">
+                        <i class="fab fa-google mr-2"></i>
+                        Sign in with Google
+                    </button>
+                    <div class="text-center text-gray-500">or</div>
+                    <div class="space-y-2">
+                        <input id="phoneNumber" type="tel" placeholder="+91 9876543210" class="w-full p-3 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        <button id="sendOTP" class="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700">
+                            Send OTP
+                        </button>
+                    </div>
+                    <div id="otpSection" class="hidden space-y-2">
+                        <input id="otpCode" type="text" placeholder="Enter OTP" class="w-full p-3 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        <button id="verifyOTP" class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700">
+                            Verify OTP
+                        </button>
+                    </div>
+                </div>
+                <button id="closeLogin" class="absolute top-4 right-4 text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Dashboard -->
+        <div id="dashboard" class="hidden">
+            <!-- Storage Usage -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+                <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Storage Usage</h3>
+                <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                    <div id="storageProgress" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                    <span id="storageUsed">0 MB</span> / 10 GB used
+                </p>
+            </div>
+
+            <!-- Navigation Tabs -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow mb-6">
+                <div class="border-b border-gray-200 dark:border-gray-700">
+                    <nav class="flex space-x-8 px-6">
+                        <button class="tab-btn active py-4 px-1 border-b-2 border-blue-500 font-medium text-sm text-blue-600" data-tab="aadhaar">
+                            <i class="fas fa-id-card mr-2"></i>Aadhaar Tools
+                        </button>
+                        <button class="tab-btn py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300" data-tab="marked">
+                            <i class="fas fa-users mr-2"></i>Marked People
+                        </button>
+                        <button class="tab-btn py-4 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300" data-tab="tools">
+                            <i class="fas fa-tools mr-2"></i>Extra Tools
+                        </button>
+                    </nav>
+                </div>
+
+                <!-- Aadhaar Tools Tab -->
+                <div id="aadhaar-tab" class="tab-content p-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Upload Section -->
+                        <div class="space-y-6">
+                            <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
+                                <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Upload Aadhaar</h3>
+                                <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
+                                    <input type="file" id="aadhaarUpload" accept=".jpg,.jpeg,.png,.pdf" class="hidden">
+                                    <label for="aadhaarUpload" class="cursor-pointer">
+                                        <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-4"></i>
+                                        <p class="text-gray-600 dark:text-gray-400">Click to upload or drag and drop</p>
+                                        <p class="text-sm text-gray-500">JPG, PNG, PDF (Max 5MB)</p>
+                                    </label>
+                                </div>
+                                <div id="uploadedFiles" class="mt-4 space-y-2"></div>
+                            </div>
+
+                            <!-- Image Editor -->
+                            <div id="imageEditor" class="hidden bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
+                                <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Edit Image</h3>
+                                <div class="mb-4 flex space-x-2">
+                                    <button id="rotateLeft" class="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700">
+                                        <i class="fas fa-undo"></i> Rotate Left
+                                    </button>
+                                    <button id="rotateRight" class="bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700">
+                                        <i class="fas fa-redo"></i> Rotate Right
+                                    </button>
+                                    <button id="cropImage" class="bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700">
+                                        <i class="fas fa-crop"></i> Crop
+                                    </button>
+                                    <button id="saveImage" class="bg-purple-600 text-white px-3 py-2 rounded hover:bg-purple-700">
+                                        <i class="fas fa-save"></i> Save
+                                    </button>
+                                </div>
+                                <div class="max-h-96 overflow-hidden">
+                                    <img id="editImage" class="max-w-full">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- OCR and AI Check Section -->
+                        <div class="space-y-6">
+                            <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
+                                <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">OCR Results</h3>
+                                <button id="extractText" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 mb-4">
+                                    <i class="fas fa-eye"></i> Extract Text
+                                </button>
+                                <div id="ocrResults" class="space-y-3">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Name</label>
+                                        <input id="extractedName" type="text" class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-600 dark:border-gray-500 dark:text-white">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Date of Birth</label>
+                                        <input id="extractedDOB" type="text" class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-600 dark:border-gray-500 dark:text-white">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Aadhaar Number</label>
+                                        <input id="extractedAadhaar" type="text" class="mt-1 block w-full rounded-md border-gray-300 dark:bg-gray-600 dark:border-gray-500 dark:text-white">
+                                    </div>
+                                    <button id="saveOCRData" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+                                        <i class="fas fa-save"></i> Save Data
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
+                                <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">AI Validity Check</h3>
+                                <button id="checkValidity" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 mb-4">
+                                    <i class="fas fa-robot"></i> Check with AI
+                                </button>
+                                <div id="validityResult" class="hidden p-4 rounded-lg">
+                                    <div class="flex items-center">
+                                        <i id="validityIcon" class="text-2xl mr-3"></i>
+                                        <div>
+                                            <p id="validityStatus" class="font-semibold"></p>
+                                            <p id="validityDetails" class="text-sm text-gray-600 dark:text-gray-400"></p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Marked People Tab -->
+                <div id="marked-tab" class="tab-content hidden p-6">
+                    <div class="mb-6 flex flex-col sm:flex-row gap-4">
+                        <input id="searchPeople" type="text" placeholder="Search people..." class="flex-1 p-3 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        <select id="filterStatus" class="p-3 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                            <option value="">All Status</option>
+                            <option value="Verified">Verified</option>
+                            <option value="Pending">Pending</option>
+                            <option value="Follow-Up">Follow-Up</option>
+                        </select>
+                        <button id="addPersonBtn" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700">
+                            <i class="fas fa-plus mr-2"></i>Add Person
+                        </button>
+                        <button id="exportData" class="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700">
+                            <i class="fas fa-download mr-2"></i>Export
+                        </button>
+                    </div>
+
+                    <!-- Add Person Form -->
+                    <div id="addPersonForm" class="hidden bg-gray-50 dark:bg-gray-700 rounded-lg p-6 mb-6">
+                        <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Add New Person</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input id="personName" type="text" placeholder="Full Name" class="p-3 border rounded-lg dark:bg-gray-600 dark:border-gray-500 dark:text-white">
+                            <input id="personId" type="text" placeholder="Aadhaar/Voter ID" class="p-3 border rounded-lg dark:bg-gray-600 dark:border-gray-500 dark:text-white">
+                            <input id="personMobile" type="tel" placeholder="Mobile Number" class="p-3 border rounded-lg dark:bg-gray-600 dark:border-gray-500 dark:text-white">
+                            <select id="personStatus" class="p-3 border rounded-lg dark:bg-gray-600 dark:border-gray-500 dark:text-white">
+                                <option value="Pending">Pending</option>
+                                <option value="Verified">Verified</option>
+                                <option value="Follow-Up">Follow-Up</option>
+                            </select>
+                        </div>
+                        <textarea id="personRemarks" placeholder="Remarks" class="w-full p-3 border rounded-lg mt-4 dark:bg-gray-600 dark:border-gray-500 dark:text-white" rows="3"></textarea>
+                        <div class="mt-4 flex space-x-2">
+                            <button id="savePerson" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Save</button>
+                            <button id="cancelAdd" class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700">Cancel</button>
+                        </div>
+                    </div>
+
+                    <!-- People Table -->
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                <thead class="bg-gray-50 dark:bg-gray-700">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Name</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">ID</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Mobile</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="peopleTableBody" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Extra Tools Tab -->
+                <div id="tools-tab" class="tab-content hidden p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <!-- PDF Tools -->
+                        <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
+                            <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+                                <i class="fas fa-file-pdf text-red-600 mr-2"></i>PDF Tools
+                            </h3>
+                            <div class="space-y-3">
+                                <button class="tool-btn w-full bg-red-600 text-white py-2 rounded hover:bg-red-700" data-tool="compress-pdf">
+                                    <i class="fas fa-compress mr-2"></i>Compress PDF
+                                </button>
+                                <button class="tool-btn w-full bg-red-600 text-white py-2 rounded hover:bg-red-700" data-tool="merge-pdf">
+                                    <i class="fas fa-object-group mr-2"></i>Merge PDFs
+                                </button>
+                                <button class="tool-btn w-full bg-red-600 text-white py-2 rounded hover:bg-red-700" data-tool="pdf-to-jpg">
+                                    <i class="fas fa-image mr-2"></i>PDF to JPG
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Image Tools -->
+                        <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
+                            <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+                                <i class="fas fa-image text-green-600 mr-2"></i>Image Tools
+                            </h3>
+                            <div class="space-y-3">
+                                <button class="tool-btn w-full bg-green-600 text-white py-2 rounded hover:bg-green-700" data-tool="jpg-to-pdf">
+                                    <i class="fas fa-file-pdf mr-2"></i>JPG to PDF
+                                </button>
+                                <button class="tool-btn w-full bg-green-600 text-white py-2 rounded hover:bg-green-700" data-tool="resize-signature">
+                                    <i class="fas fa-signature mr-2"></i>Resize Signature
+                                </button>
+                                <button class="tool-btn w-full bg-green-600 text-white py-2 rounded hover:bg-green-700" data-tool="remove-bg">
+                                    <i class="fas fa-cut mr-2"></i>Remove Background
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Form Tools -->
+                        <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
+                            <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+                                <i class="fas fa-wpforms text-blue-600 mr-2"></i>Form Tools
+                            </h3>
+                            <div class="space-y-3">
+                                <button class="tool-btn w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700" data-tool="form-filler">
+                                    <i class="fas fa-edit mr-2"></i>Form Filler
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tool Workspace -->
+                    <div id="toolWorkspace" class="hidden mt-6 bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 id="toolTitle" class="text-lg font-semibold text-gray-900 dark:text-white"></h3>
+                            <button id="closeTool" class="text-gray-500 hover:text-gray-700">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div id="toolContent"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Welcome Screen -->
+        <div id="welcomeScreen" class="text-center py-12">
+            <i class="fas fa-vote-yea text-6xl text-blue-600 mb-6"></i>
+            <h1 class="text-4xl font-bold text-gray-900 dark:text-white mb-4">Welcome to BLO Assistant</h1>
+            <p class="text-xl text-gray-600 dark:text-gray-400 mb-8">Your comprehensive toolkit for Booth Level Officer duties</p>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                    <i class="fas fa-id-card text-3xl text-blue-600 mb-4"></i>
+                    <h3 class="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Aadhaar Verification</h3>
+                    <p class="text-gray-600 dark:text-gray-400">Upload, process, and verify Aadhaar cards with OCR and AI</p>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                    <i class="fas fa-users text-3xl text-green-600 mb-4"></i>
+                    <h3 class="text-lg font-semibold mb-2 text-gray-900 dark:text-white">People Management</h3>
+                    <p class="text-gray-600 dark:text-gray-400">Track and manage marked people with status updates</p>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                    <i class="fas fa-tools text-3xl text-purple-600 mb-4"></i>
+                    <h3 class="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Utility Tools</h3>
+                    <p class="text-gray-600 dark:text-gray-400">PDF processing, image editing, and form filling tools</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Assistant Chatbot -->
+    <div id="chatbot" class="fixed bottom-4 right-4 z-40">
+        <button id="chatToggle" class="bg-blue-600 text-white w-14 h-14 rounded-full shadow-lg hover:bg-blue-700 flex items-center justify-center">
+            <i class="fas fa-robot text-xl"></i>
+        </button>
+        <div id="chatWindow" class="hidden absolute bottom-16 right-0 w-80 h-96 bg-white dark:bg-gray-800 rounded-lg shadow-xl border">
+            <div class="bg-blue-600 text-white p-4 rounded-t-lg">
+                <h3 class="font-semibold">BLO Assistant AI</h3>
+                <button id="chatClose" class="absolute top-4 right-4 text-white hover:text-gray-200">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div id="chatMessages" class="h-64 overflow-y-auto p-4 space-y-2">
+                <div class="chat-bubble bg-gray-100 dark:bg-gray-700 p-3 rounded-lg">
+                    <p class="text-sm text-gray-800 dark:text-gray-200">Hello! I'm your BLO Assistant. Ask me about Aadhaar verification, people management, or any other BLO-related queries.</p>
+                </div>
+            </div>
+            <div class="p-4 border-t">
+                <div class="flex space-x-2">
+                    <input id="chatInput" type="text" placeholder="Ask me anything..." class="flex-1 p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                    <button id="chatSend" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 flex items-center space-x-4">
+            <div class="loading-spinner"></div>
+            <span class="text-gray-900 dark:text-white">Processing...</span>
+        </div>
+    </div>
+
+    <script>
+        // Firebase Configuration (Replace with your config)
+        const firebaseConfig = {
+  apiKey: "AIzaSyCVkUtqfDKUvLjx3h4WPqx--OtuxYq4mUg",
+  authDomain: "aadhaar-survey.firebaseapp.com",
+  projectId: "aadhaar-survey",
+  storageBucket: "aadhaar-survey.firebasestorage.app",
+  messagingSenderId: "212472561980",
+  appId: "1:212472561980:web:bbfd807e657981de7f9e39"
+};
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const storage = firebase.storage();
+        const database = firebase.database();
+
+        // Global Variables
+        let currentUser = null;
+        let cropper = null;
+        let currentImageFile = null;
+        let uploadedFiles = [];
+        let markedPeople = JSON.parse(localStorage.getItem('markedPeople') || '[]');
+
+        // Theme Management
+        const themeToggle = document.getElementById('themeToggle');
+        const html = document.documentElement;
+
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            if (savedTheme === 'dark') {
+                html.classList.add('dark');
+            }
+        }
+
+        themeToggle.addEventListener('click', () => {
+            html.classList.toggle('dark');
+            const theme = html.classList.contains('dark') ? 'dark' : 'light';
+            localStorage.setItem('theme', theme);
+        });
+
+        // Toast Notifications
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            const colors = {
+                success: 'bg-green-500',
+                error: 'bg-red-500',
+                warning: 'bg-yellow-500',
+                info: 'bg-blue-500'
+            };
+            
+            toast.className = `${colors[type]} text-white px-6 py-3 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full`;
+            toast.textContent = message;
+            
+            document.getElementById('toastContainer').appendChild(toast);
+            
+            setTimeout(() => toast.classList.remove('translate-x-full'), 100);
+            setTimeout(() => {
+                toast.classList.add('translate-x-full');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Loading Overlay
+        function showLoading() {
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.add('hidden');
+        }
+
+        // Authentication
+        const loginModal = document.getElementById('loginModal');
+        const loginBtn = document.getElementById('loginBtn');
+        const closeLogin = document.getElementById('closeLogin');
+        const googleSignIn = document.getElementById('googleSignIn');
+        const sendOTP = document.getElementById('sendOTP');
+        const verifyOTP = document.getElementById('verifyOTP');
+        const logoutBtn = document.getElementById('logoutBtn');
+
+        loginBtn.addEventListener('click', () => {
+            loginModal.classList.remove('hidden');
+        });
+
+        closeLogin.addEventListener('click', () => {
+            loginModal.classList.add('hidden');
+        });
+
+        // Google Sign In
+        googleSignIn.addEventListener('click', async () => {
+            try {
+                const provider = new firebase.auth.GoogleAuthProvider();
+                const result = await auth.signInWithPopup(provider);
+                showToast('Successfully signed in with Google!', 'success');
+                loginModal.classList.add('hidden');
+            } catch (error) {
+                showToast('Google sign in failed: ' + error.message, 'error');
+            }
+        });
+
+        // Phone Authentication
+        let confirmationResult = null;
+
+        sendOTP.addEventListener('click', async () => {
+            const phoneNumber = document.getElementById('phoneNumber').value;
+            if (!phoneNumber) {
+                showToast('Please enter a phone number', 'warning');
+                return;
+            }
+
+            try {
+                const appVerifier = new firebase.auth.RecaptchaVerifier('sendOTP', {
+                    'size': 'invisible'
+                });
+                confirmationResult = await auth.signInWithPhoneNumber(phoneNumber, appVerifier);
+                document.getElementById('otpSection').classList.remove('hidden');
+                showToast('OTP sent successfully!', 'success');
+            } catch (error) {
+                showToast('Failed to send OTP: ' + error.message, 'error');
+            }
+        });
+
+        verifyOTP.addEventListener('click', async () => {
+            const otpCode = document.getElementById('otpCode').value;
+            if (!otpCode || !confirmationResult) {
+                showToast('Please enter the OTP', 'warning');
+                return;
+            }
+
+            try {
+                await confirmationResult.confirm(otpCode);
+                showToast('Phone number verified successfully!', 'success');
+                loginModal.classList.add('hidden');
+            } catch (error) {
+                showToast('Invalid OTP: ' + error.message, 'error');
+            }
+        });
+
+        // Logout
+        logoutBtn.addEventListener('click', async () => {
+            try {
+                await auth.signOut();
+                showToast('Logged out successfully!', 'success');
+            } catch (error) {
+                showToast('Logout failed: ' + error.message, 'error');
+            }
+        });
+
+        // Auth State Observer
+        auth.onAuthStateChanged((user) => {
+            currentUser = user;
+            if (user) {
+                document.getElementById('welcomeScreen').classList.add('hidden');
+                document.getElementById('dashboard').classList.remove('hidden');
+                document.getElementById('loginBtn').classList.add('hidden');
+                document.getElementById('userInfo').classList.remove('hidden');
+                document.getElementById('userInfo').classList.add('flex');
+                
+                document.getElementById('userName').textContent = user.displayName || user.phoneNumber || 'User';
+                if (user.photoURL) {
+                    document.getElementById('userPhoto').src = user.photoURL;
+                } else {
+                    document.getElementById('userPhoto').src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iMTYiIGZpbGw9IiM2MzY2RjEiLz4KPHRleHQgeD0iMTYiIHk9IjIwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSJ3aGl0ZSIgZm9udC1zaXplPSIxNCIgZm9udC1mYW1pbHk9IkFyaWFsIj5VPC90ZXh0Pgo8L3N2Zz4K';
+                }
+                
+                updateStorageUsage();
+            } else {
+                document.getElementById('welcomeScreen').classList.remove('hidden');
+                document.getElementById('dashboard').classList.add('hidden');
+                document.getElementById('loginBtn').classList.remove('hidden');
+                document.getElementById('userInfo').classList.add('hidden');
+            }
+        });
+
+        // Tab Management
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        const tabContents = document.querySelectorAll('.tab-content');
+
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tabName = btn.dataset.tab;
+                
+                // Update active tab button
+                tabBtns.forEach(b => {
+                    b.classList.remove('active', 'border-blue-500', 'text-blue-600');
+                    b.classList.add('border-transparent', 'text-gray-500');
+                });
+                btn.classList.add('active', 'border-blue-500', 'text-blue-600');
+                btn.classList.remove('border-transparent', 'text-gray-500');
+                
+                // Show active tab content
+                tabContents.forEach(content => content.classList.add('hidden'));
+                document.getElementById(tabName + '-tab').classList.remove('hidden');
+                
+                // Load tab-specific data
+                if (tabName === 'marked') {
+                    renderPeopleTable();
+                }
+            });
+        });
+
+        // File Upload and Processing
+        const aadhaarUpload = document.getElementById('aadhaarUpload');
+        const uploadedFilesDiv = document.getElementById('uploadedFiles');
+
+        aadhaarUpload.addEventListener('change', handleFileUpload);
+
+        function handleFileUpload(event) {
+            const files = Array.from(event.target.files);
+            
+            files.forEach(file => {
+                if (uploadedFiles.length >= 2) {
+                    showToast('Maximum 2 files allowed per user', 'warning');
+                    return;
+                }
+                
+                if (file.size > 5 * 1024 * 1024) {
+                    showToast('File size must be less than 5MB', 'error');
+                    return;
+                }
+                
+                uploadedFiles.push(file);
+                displayUploadedFile(file);
+                
+                if (file.type.startsWith('image/')) {
+                    setupImageEditor(file);
+                }
+            });
+        }
+
+        function displayUploadedFile(file) {
+            const fileDiv = document.createElement('div');
+            fileDiv.className = 'flex items-center justify-between bg-white dark:bg-gray-600 p-3 rounded border';
+            fileDiv.innerHTML = `
+                <div class="flex items-center">
+                    <i class="fas fa-file-${file.type.includes('pdf') ? 'pdf' : 'image'} text-lg mr-3"></i>
+                    <span class="text-sm">${file.name}</span>
+                </div>
+                <div class="flex space-x-2">
+                    <button onclick="uploadToFirebase('${file.name}')" class="text-blue-600 hover:text-blue-800">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                    </button>
+                    <button onclick="removeFile('${file.name}')" class="text-red-600 hover:text-red-800">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `;
+            uploadedFilesDiv.appendChild(fileDiv);
+        }
+
+        function removeFile(fileName) {
+            uploadedFiles = uploadedFiles.filter(file => file.name !== fileName);
+            renderUploadedFiles();
+        }
+
+        function renderUploadedFiles() {
+            uploadedFilesDiv.innerHTML = '';
+            uploadedFiles.forEach(displayUploadedFile);
+        }
+
+        // Image Editor
+        function setupImageEditor(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const editImage = document.getElementById('editImage');
+                editImage.src = e.target.result;
+                document.getElementById('imageEditor').classList.remove('hidden');
+                
+                if (cropper) {
+                    cropper.destroy();
+                }
+                
+                cropper = new Cropper(editImage, {
+                    aspectRatio: 16 / 9,
+                    viewMode: 1,
+                    responsive: true,
+                    restore: false,
+                    guides: true,
+                    center: true,
+                    highlight: false,
+                    cropBoxMovable: true,
+                    cropBoxResizable: true,
+                    toggleDragModeOnDblclick: false,
+                });
+                
+                currentImageFile = file;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Image Editor Controls
+        document.getElementById('rotateLeft').addEventListener('click', () => {
+            if (cropper) cropper.rotate(-90);
+        });
+
+        document.getElementById('rotateRight').addEventListener('click', () => {
+            if (cropper) cropper.rotate(90);
+        });
+
+        document.getElementById('cropImage').addEventListener('click', () => {
+            if (cropper) {
+                const canvas = cropper.getCroppedCanvas();
+                const editImage = document.getElementById('editImage');
+                editImage.src = canvas.toDataURL();
+                cropper.destroy();
+                cropper = new Cropper(editImage, {
+                    aspectRatio: 16 / 9,
+                    viewMode: 1
+                });
+            }
+        });
+
+        document.getElementById('saveImage').addEventListener('click', () => {
+            if (cropper) {
+                const canvas = cropper.getCroppedCanvas();
+                canvas.toBlob((blob) => {
+                    const newFile = new File([blob], currentImageFile.name, {
+                        type: currentImageFile.type
+                    });
+                    
+                    // Replace the file in uploadedFiles array
+                    const index = uploadedFiles.findIndex(f => f.name === currentImageFile.name);
+                    if (index !== -1) {
+                        uploadedFiles[index] = newFile;
+                    }
+                    
+                    showToast('Image saved successfully!', 'success');
+                    document.getElementById('imageEditor').classList.add('hidden');
+                });
+            }
+        });
+
+        // Firebase Storage Upload
+        async function uploadToFirebase(fileName) {
+            if (!currentUser) {
+                showToast('Please login first', 'warning');
+                return;
+            }
+            
+            const file = uploadedFiles.find(f => f.name === fileName);
+            if (!file) return;
+            
+            showLoading();
+            
+            try {
+                const storageRef = storage.ref(`aadhaar/${currentUser.uid}/${Date.now()}_${fileName}`);
+                const uploadTask = storageRef.put(file);
+                
+                uploadTask.on('state_changed',
+                    (snapshot) => {
+                        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                        console.log('Upload is ' + progress + '% done');
+                    },
+                    (error) => {
+                        hideLoading();
+                        showToast('Upload failed: ' + error.message, 'error');
+                    },
+                    async () => {
+                        const downloadURL = await uploadTask.snapshot.ref.getDownloadURL();
+                        hideLoading();
+                        showToast('File uploaded successfully!', 'success');
+                        updateStorageUsage();
+                    }
+                );
+            } catch (error) {
+                hideLoading();
+                showToast('Upload failed: ' + error.message, 'error');
+            }
+        }
+
+        // Storage Usage
+        async function updateStorageUsage() {
+            if (!currentUser) return;
+            
+            try {
+                const storageRef = storage.ref(`aadhaar/${currentUser.uid}`);
+                const listResult = await storageRef.listAll();
+                
+                let totalSize = 0;
+                for (const itemRef of listResult.items) {
+                    const metadata = await itemRef.getMetadata();
+                    totalSize += metadata.size;
+                }
+                
+                const usedMB = (totalSize / (1024 * 1024)).toFixed(2);
+                const usedGB = (totalSize / (1024 * 1024 * 1024)).toFixed(2);
+                const maxGB = 10;
+                const percentage = (usedGB / maxGB) * 100;
+                
+                document.getElementById('storageUsed').textContent = `${usedMB} MB`;
+                document.getElementById('storageProgress').style.width = `${Math.min(percentage, 100)}%`;
+                
+                if (percentage > 90) {
+                    document.getElementById('storageProgress').className = 'bg-red-600 h-2.5 rounded-full';
+                } else if (percentage > 70) {
+                    document.getElementById('storageProgress').className = 'bg-yellow-600 h-2.5 rounded-full';
+                } else {
+                    document.getElementById('storageProgress').className = 'bg-blue-600 h-2.5 rounded-full';
+                }
+            } catch (error) {
+                console.error('Error updating storage usage:', error);
+            }
+        }
+
+        // OCR Functionality
+        document.getElementById('extractText').addEventListener('click', async () => {
+            if (uploadedFiles.length === 0) {
+                showToast('Please upload an Aadhaar image first', 'warning');
+                return;
+            }
+            
+            const imageFile = uploadedFiles.find(file => file.type.startsWith('image/'));
+            if (!imageFile) {
+                showToast('Please upload an image file for OCR', 'warning');
+                return;
+            }
+            
+            showLoading();
+            
+            try {
+                const result = await Tesseract.recognize(imageFile, 'eng', {
+                    logger: m => console.log(m)
+                });
+                
+                const text = result.data.text;
+                extractAadhaarInfo(text);
+                hideLoading();
+                showToast('Text extracted successfully!', 'success');
+            } catch (error) {
+                hideLoading();
+                showToast('OCR failed: ' + error.message, 'error');
+            }
+        });
+
+        function extractAadhaarInfo(text) {
+            // Extract Name (usually after "Name" or before DOB)
+            const nameMatch = text.match(/(?:Name|नाम)[:\s]*([A-Za-z\s]+)/i);
+            if (nameMatch) {
+                document.getElementById('extractedName').value = nameMatch[1].trim();
+            }
+            
+            // Extract DOB (DD/MM/YYYY or DD-MM-YYYY format)
+            const dobMatch = text.match(/(?:DOB|जन्म)[:\s]*(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i);
+            if (dobMatch) {
+                document.getElementById('extractedDOB').value = dobMatch[1];
+            }
+            
+            // Extract Aadhaar Number (12 digits, may have spaces or dashes)
+            const aadhaarMatch = text.match(/(\d{4}[\s\-]?\d{4}[\s\-]?\d{4})/);
+            if (aadhaarMatch) {
+                document.getElementById('extractedAadhaar').value = aadhaarMatch[1].replace(/[\s\-]/g, '');
+            }
+        }
+
+        // Save OCR Data
+        document.getElementById('saveOCRData').addEventListener('click', async () => {
+            const name = document.getElementById('extractedName').value;
+            const dob = document.getElementById('extractedDOB').value;
+            const aadhaar = document.getElementById('extractedAadhaar').value;
+            
+            if (!name || !dob || !aadhaar) {
+                showToast('Please fill all extracted fields', 'warning');
+                return;
+            }
+            
+            const ocrData = { name, dob, aadhaar, timestamp: Date.now() };
+            
+            // Save to localStorage
+            const savedOCRData = JSON.parse(localStorage.getItem('ocrData') || '[]');
+            savedOCRData.push(ocrData);
+            localStorage.setItem('ocrData', JSON.stringify(savedOCRData));
+            
+            // Save to Firebase if user is logged in
+            if (currentUser) {
+                try {
+                    await database.ref(`ocr/${currentUser.uid}`).push(ocrData);
+                    showToast('OCR data saved to cloud!', 'success');
+                } catch (error) {
+                    showToast('Failed to save to cloud: ' + error.message, 'error');
+                }
+            } else {
+                showToast('OCR data saved locally!', 'success');
+            }
+        });
+
+        // AI Validity Checker
+        document.getElementById('checkValidity').addEventListener('click', async () => {
+            if (uploadedFiles.length === 0) {
+                showToast('Please upload an Aadhaar image first', 'warning');
+                return;
+            }
+            
+            showLoading();
+            
+            // Simulate AI checking (replace with actual AI API call)
+            setTimeout(() => {
+                const aadhaarNumber = document.getElementById('extractedAadhaar').value;
+                const result = simulateAICheck(aadhaarNumber);
+                
+                displayValidityResult(result);
+                hideLoading();
+            }, 2000);
+        });
+
+        function simulateAICheck(aadhaarNumber) {
+            // Simple validation rules (replace with actual AI API)
+            const isValidFormat = /^\d{12}$/.test(aadhaarNumber.replace(/\s/g, ''));
+            const hasRepeatingDigits = /(\d)\1{5,}/.test(aadhaarNumber);
+            
+            if (!isValidFormat) {
+                return {
+                    status: 'Fake',
+                    confidence: 95,
+                    details: 'Invalid Aadhaar number format'
+                };
+            }
+            
+            if (hasRepeatingDigits) {
+                return {
+                    status: 'Suspicious',
+                    confidence: 75,
+                    details: 'Contains suspicious repeating digit patterns'
+                };
+            }
+            
+            return {
+                status: 'Valid',
+                confidence: 90,
+                details: 'Aadhaar appears to be genuine'
+            };
+        }
+
+        function displayValidityResult(result) {
+            const resultDiv = document.getElementById('validityResult');
+            const iconElement = document.getElementById('validityIcon');
+            const statusElement = document.getElementById('validityStatus');
+            const detailsElement = document.getElementById('validityDetails');
+            
+            resultDiv.classList.remove('hidden');
+            
+            if (result.status === 'Valid') {
+                resultDiv.className = 'p-4 rounded-lg bg-green-100 dark:bg-green-900';
+                iconElement.className = 'fas fa-check-circle text-green-600 text-2xl mr-3';
+                statusElement.className = 'font-semibold text-green-800 dark:text-green-200';
+            } else if (result.status === 'Suspicious') {
+                resultDiv.className = 'p-4 rounded-lg bg-yellow-100 dark:bg-yellow-900';
+                iconElement.className = 'fas fa-exclamation-triangle text-yellow-600 text-2xl mr-3';
+                statusElement.className = 'font-semibold text-yellow-800 dark:text-yellow-200';
+            } else {
+                resultDiv.className = 'p-4 rounded-lg bg-red-100 dark:bg-red-900';
+                iconElement.className = 'fas fa-times-circle text-red-600 text-2xl mr-3';
+                statusElement.className = 'font-semibold text-red-800 dark:text-red-200';
+            }
+            
+            statusElement.textContent = `${result.status} (${result.confidence}% confidence)`;
+            detailsElement.textContent = result.details;
+        }
+
+        // Marked People Management
+        const addPersonBtn = document.getElementById('addPersonBtn');
+        const addPersonForm = document.getElementById('addPersonForm');
+        const cancelAdd = document.getElementById('cancelAdd');
+        const savePerson = document.getElementById('savePerson');
+        const searchPeople = document.getElementById('searchPeople');
+        const filterStatus = document.getElementById('filterStatus');
+
+        addPersonBtn.addEventListener('click', () => {
+            addPersonForm.classList.remove('hidden');
+            clearPersonForm();
+        });
+
+        cancelAdd.addEventListener('click', () => {
+            addPersonForm.classList.add('hidden');
+        });
+
+        savePerson.addEventListener('click', () => {
+            const person = {
+                id: Date.now(),
+                name: document.getElementById('personName').value,
+                idNumber: document.getElementById('personId').value,
+                mobile: document.getElementById('personMobile').value,
+                status: document.getElementById('personStatus').value,
+                remarks: document.getElementById('personRemarks').value,
+                timestamp: new Date().toISOString()
+            };
+            
+            if (!person.name || !person.idNumber) {
+                showToast('Name and ID are required', 'warning');
+                return;
+            }
+            
+            markedPeople.push(person);
+            localStorage.setItem('markedPeople', JSON.stringify(markedPeople));
+            
+            addPersonForm.classList.add('hidden');
+            renderPeopleTable();
+            showToast('Person added successfully!', 'success');
+        });
+
+        function clearPersonForm() {
+            document.getElementById('personName').value = '';
+            document.getElementById('personId').value = '';
+            document.getElementById('personMobile').value = '';
+            document.getElementById('personStatus').value = 'Pending';
+            document.getElementById('personRemarks').value = '';
+        }
+
+        function renderPeopleTable() {
+            const tbody = document.getElementById('peopleTableBody');
+            const searchTerm = searchPeople.value.toLowerCase();
+            const statusFilter = filterStatus.value;
+            
+            let filteredPeople = markedPeople.filter(person => {
+                const matchesSearch = person.name.toLowerCase().includes(searchTerm) ||
+                                    person.idNumber.includes(searchTerm) ||
+                                    person.mobile.includes(searchTerm);
+                const matchesStatus = !statusFilter || person.status === statusFilter;
+                return matchesSearch && matchesStatus;
+            });
+            
+            tbody.innerHTML = filteredPeople.map(person => `
+                <tr>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                        ${person.name}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                        ${person.idNumber}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                        ${person.mobile}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                            ${person.status === 'Verified' ? 'bg-green-100 text-green-800' : 
+                              person.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' : 
+                              'bg-red-100 text-red-800'}">
+                            ${person.status}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <button onclick="editPerson(${person.id})" class="text-indigo-600 hover:text-indigo-900 mr-3">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button onclick="deletePerson(${person.id})" class="text-red-600 hover:text-red-900">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function editPerson(id) {
+            const person = markedPeople.find(p => p.id === id);
+            if (!person) return;
+            
+            document.getElementById('personName').value = person.name;
+            document.getElementById('personId').value = person.idNumber;
+            document.getElementById('personMobile').value = person.mobile;
+            document.getElementById('personStatus').value = person.status;
+            document.getElementById('personRemarks').value = person.remarks;
+            
+            addPersonForm.classList.remove('hidden');
+            
+            // Change save button to update
+            savePerson.textContent = 'Update';
+            savePerson.onclick = () => updatePerson(id);
+        }
+
+        function updatePerson(id) {
+            const index = markedPeople.findIndex(p => p.id === id);
+            if (index === -1) return;
+            
+            markedPeople[index] = {
+                ...markedPeople[index],
+                name: document.getElementById('personName').value,
+                idNumber: document.getElementById('personId').value,
+                mobile: document.getElementById('personMobile').value,
+                status: document.getElementById('personStatus').value,
+                remarks: document.getElementById('personRemarks').value,
+                updatedAt: new Date().toISOString()
+            };
+            
+            localStorage.setItem('markedPeople', JSON.stringify(markedPeople));
+            addPersonForm.classList.add('hidden');
+            renderPeopleTable();
+            showToast('Person updated successfully!', 'success');
+            
+            // Reset save button
+            savePerson.textContent = 'Save';
+            savePerson.onclick = savePerson.addEventListener('click', () => {
+                // Original save logic here
+            });
+        }
+
+        function deletePerson(id) {
+            if (confirm('Are you sure you want to delete this person?')) {
+                markedPeople = markedPeople.filter(p => p.id !== id);
+                localStorage.setItem('markedPeople', JSON.stringify(markedPeople));
+                renderPeopleTable();
+                showToast('Person deleted successfully!', 'success');
+            }
+        }
+
+        // Search and Filter
+        searchPeople.addEventListener('input', renderPeopleTable);
+        filterStatus.addEventListener('change', renderPeopleTable);
+
+        // Export Data
+        document.getElementById('exportData').addEventListener('click', () => {
+            const csvContent = generateCSV(markedPeople);
+            downloadCSV(csvContent, 'marked_people.csv');
+            showToast('Data exported successfully!', 'success');
+        });
+
+        function generateCSV(data) {
+            const headers = ['Name', 'ID Number', 'Mobile', 'Status', 'Remarks', 'Date Added'];
+            const rows = data.map(person => [
+                person.name,
+                person.idNumber,
+                person.mobile,
+                person.status,
+                person.remarks,
+                new Date(person.timestamp).toLocaleDateString()
+            ]);
+            
+            return [headers, ...rows].map(row => 
+                row.map(field => `"${field}"`).join(',')
+            ).join('\n');
+        }
+
+        function downloadCSV(content, filename) {
+            const blob = new Blob([content], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+
+        // Extra Tools
+        const toolBtns = document.querySelectorAll('.tool-btn');
+        const toolWorkspace = document.getElementById('toolWorkspace');
+        const toolTitle = document.getElementById('toolTitle');
+        const toolContent = document.getElementById('toolContent');
+        const closeTool = document.getElementById('closeTool');
+
+        toolBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tool = btn.dataset.tool;
+                openTool(tool);
+            });
+        });
+
+        closeTool.addEventListener('click', () => {
+            toolWorkspace.classList.add('hidden');
+        });
+
+        function openTool(toolName) {
+            toolWorkspace.classList.remove('hidden');
+            
+            const toolConfigs = {
+                'compress-pdf': {
+                    title: 'PDF Compressor',
+                    content: `
+                        <div class="space-y-4">
+                            <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
+                                <input type="file" id="pdfCompressInput" accept=".pdf" class="hidden">
+                                <label for="pdfCompressInput" class="cursor-pointer">
+                                    <i class="fas fa-file-pdf text-4xl text-red-500 mb-4"></i>
+                                    <p class="text-gray-600 dark:text-gray-400">Select PDF to compress</p>
+                                </label>
+                            </div>
+                            <button id="compressPdfBtn" class="w-full bg-red-600 text-white py-3 rounded-lg hover:bg-red-700 disabled:opacity-50" disabled>
+                                <i class="fas fa-compress mr-2"></i>Compress PDF
+                            </button>
+                            <div id="compressResult" class="hidden"></div>
+                        </div>
+                    `
+                },
+                'merge-pdf': {
+                    title: 'PDF Merger',
+                    content: `
+                        <div class="space-y-4">
+                            <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
+                                <input type="file" id="pdfMergeInput" accept=".pdf" multiple class="hidden">
+                                <label for="pdfMergeInput" class="cursor-pointer">
+                                    <i class="fas fa-file-pdf text-4xl text-red-500 mb-4"></i>
+                                    <p class="text-gray-600 dark:text-gray-400">Select multiple PDFs to merge</p>
+                                </label>
+                            </div>
+                            <div id="selectedPdfs" class="space-y-2"></div>
+                            <button id="mergePdfBtn" class="w-full bg-red-600 text-white py-3 rounded-lg hover:bg-red-700 disabled:opacity-50" disabled>
+                                <i class="fas fa-object-group mr-2"></i>Merge PDFs
+                            </button>
+                        </div>
+                    `
+                },
+                'pdf-to-jpg': {
+                    title: 'PDF to JPG Converter',
+                    content: `
+                        <div class="space-y-4">
+                            <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
+                                <input type="file" id="pdfToJpgInput" accept=".pdf" class="hidden">
+                                <label for="pdfToJpgInput" class="cursor-pointer">
+                                    <i class="fas fa-file-pdf text-4xl text-red-500 mb-4"></i>
+                                    <p class="text-gray-600 dark:text-gray-400">Select PDF to convert to JPG</p>
+                                </label>
+                            </div>
+                            <button id="convertPdfToJpgBtn" class="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 disabled:opacity-50" disabled>
+                                <i class="fas fa-image mr-2"></i>Convert to JPG
+                            </button>
+                            <div id="jpgResults" class="hidden grid grid-cols-2 gap-4"></div>
+                        </div>
+                    `
+                },
+                'jpg-to-pdf': {
+                    title: 'JPG to PDF Converter',
+                    content: `
+                        <div class="space-y-4">
+                            <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
+                                <input type="file" id="jpgToPdfInput" accept=".jpg,.jpeg,.png" multiple class="hidden">
+                                <label for="jpgToPdfInput" class="cursor-pointer">
+                                    <i class="fas fa-image text-4xl text-green-500 mb-4"></i>
+                                    <p class="text-gray-600 dark:text-gray-400">Select images to convert to PDF</p>
+                                </label>
+                            </div>
+                            <div id="selectedImages" class="grid grid-cols-3 gap-2"></div>
+                            <button id="convertJpgToPdfBtn" class="w-full bg-red-600 text-white py-3 rounded-lg hover:bg-red-700 disabled:opacity-50" disabled>
+                                <i class="fas fa-file-pdf mr-2"></i>Convert to PDF
+                            </button>
+                        </div>
+                    `
+                },
+                'resize-signature': {
+                    title: 'Signature Resizer',
+                    content: `
+                        <div class="space-y-4">
+                            <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
+                                <input type="file" id="signatureInput" accept=".jpg,.jpeg,.png" class="hidden">
+                                <label for="signatureInput" class="cursor-pointer">
+                                    <i class="fas fa-signature text-4xl text-blue-500 mb-4"></i>
+                                    <p class="text-gray-600 dark:text-gray-400">Select signature image</p>
+                                </label>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">Width (px)</label>
+                                    <input id="signatureWidth" type="number" value="200" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">Height (px)</label>
+                                    <input id="signatureHeight" type="number" value="100" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600">
+                                </div>
+                            </div>
+                            <button id="resizeSignatureBtn" class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50" disabled>
+                                <i class="fas fa-expand-arrows-alt mr-2"></i>Resize Signature
+                            </button>
+                            <div id="signaturePreview" class="hidden text-center"></div>
+                        </div>
+                    `
+                },
+                'remove-bg': {
+                    title: 'Background Remover',
+                    content: `
+                        <div class="space-y-4">
+                            <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
+                                <input type="file" id="removeBgInput" accept=".jpg,.jpeg,.png" class="hidden">
+                                <label for="removeBgInput" class="cursor-pointer">
+                                    <i class="fas fa-cut text-4xl text-purple-500 mb-4"></i>
+                                    <p class="text-gray-600 dark:text-gray-400">Select image to remove background</p>
+                                </label>
+                            </div>
+                            <button id="removeBgBtn" class="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 disabled:opacity-50" disabled>
+                                <i class="fas fa-magic mr-2"></i>Remove Background
+                            </button>
+                            <div id="bgRemoveResult" class="hidden grid grid-cols-2 gap-4">
+                                <div>
+                                    <h4 class="font-medium mb-2">Original</h4>
+                                    <img id="originalImage" class="w-full border rounded">
+                                </div>
+                                <div>
+                                    <h4 class="font-medium mb-2">Background Removed</h4>
+                                    <img id="processedImage" class="w-full border rounded">
+                                </div>
+                            </div>
+                        </div>
+                    `
+                },
+                'form-filler': {
+                    title: 'Form Filler Assistant',
+                    content: `
+                        <div class="space-y-4">
+                            <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                                <h4 class="font-medium mb-3">Saved Data</h4>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">Name</label>
+                                        <input id="formName" type="text" class="w-full p-2 border rounded dark:bg-gray-600 dark:border-gray-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">Aadhaar Number</label>
+                                        <input id="formAadhaar" type="text" class="w-full p-2 border rounded dark:bg-gray-600 dark:border-gray-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">Voter ID</label>
+                                        <input id="formVoterId" type="text" class="w-full p-2 border rounded dark:bg-gray-600 dark:border-gray-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">Mobile Number</label>
+                                        <input id="formMobile" type="tel" class="w-full p-2 border rounded dark:bg-gray-600 dark:border-gray-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">Address</label>
+                                        <textarea id="formAddress" class="w-full p-2 border rounded dark:bg-gray-600 dark:border-gray-500" rows="2"></textarea>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1">Date of Birth</label>
+                                        <input id="formDob" type="date" class="w-full p-2 border rounded dark:bg-gray-600 dark:border-gray-500">
+                                    </div>
+                                </div>
+                                <div class="mt-4 flex space-x-2">
+                                    <button id="saveFormData" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+                                        <i class="fas fa-save mr-2"></i>Save Data
+                                    </button>
+                                    <button id="loadFormData" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                                        <i class="fas fa-download mr-2"></i>Load Saved Data
+                                    </button>
+                                    <button id="clearFormData" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
+                                        <i class="fas fa-trash mr-2"></i>Clear All
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `
+                }
+            };
+            
+            const config = toolConfigs[toolName];
+            if (config) {
+                toolTitle.textContent = config.title;
+                toolContent.innerHTML = config.content;
+                initializeTool(toolName);
+            }
+        }
+
+        function initializeTool(toolName) {
+            switch (toolName) {
+                case 'compress-pdf':
+                    initPdfCompressor();
+                    break;
+                case 'merge-pdf':
+                    initPdfMerger();
+                    break;
+                case 'pdf-to-jpg':
+                    initPdfToJpg();
+                    break;
+                case 'jpg-to-pdf':
+                    initJpgToPdf();
+                    break;
+                case 'resize-signature':
+                    initSignatureResizer();
+                    break;
+                case 'remove-bg':
+                    initBackgroundRemover();
+                    break;
+                case 'form-filler':
+                    initFormFiller();
+                    break;
+            }
+        }
+
+        // PDF Compressor
+        function initPdfCompressor() {
+            const input = document.getElementById('pdfCompressInput');
+            const btn = document.getElementById('compressPdfBtn');
+            
+            input.addEventListener('change', (e) => {
+                btn.disabled = !e.target.files.length;
+            });
+            
+            btn.addEventListener('click', async () => {
+                const file = input.files[0];
+                if (!file) return;
+                
+                showLoading();
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
+                    const pdfBytes = await pdfDoc.save();
+                    
+                    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                    const url = URL.createObjectURL(blob);
+                    
+                    const result = document.getElementById('compressResult');
+                    result.innerHTML = `
+                        <div class="bg-green-100 dark:bg-green-900 p-4 rounded-lg">
+                            <p class="text-green-800 dark:text-green-200 mb-2">PDF compressed successfully!</p>
+                            <a href="${url}" download="compressed_${file.name}" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+                                <i class="fas fa-download mr-2"></i>Download Compressed PDF
+                            </a>
+                        </div>
+                    `;
+                    result.classList.remove('hidden');
+                    hideLoading();
+                    showToast('PDF compressed successfully!', 'success');
+                } catch (error) {
+                    hideLoading();
+                    showToast('PDF compression failed: ' + error.message, 'error');
+                }
+            });
+        }
+
+        // PDF Merger
+        function initPdfMerger() {
+            const input = document.getElementById('pdfMergeInput');
+            const btn = document.getElementById('mergePdfBtn');
+            const selectedDiv = document.getElementById('selectedPdfs');
+            let selectedFiles = [];
+            
+            input.addEventListener('change', (e) => {
+                selectedFiles = Array.from(e.target.files);
+                btn.disabled = selectedFiles.length < 2;
+                
+                selectedDiv.innerHTML = selectedFiles.map((file, index) => `
+                    <div class="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded">
+                        <span class="text-sm">${file.name}</span>
+                        <button onclick="removeSelectedPdf(${index})" class="text-red-600 hover:text-red-800">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `).join('');
+            });
+            
+            btn.addEventListener('click', async () => {
+                if (selectedFiles.length < 2) return;
+                
+                showLoading();
+                try {
+                    const mergedPdf = await PDFLib.PDFDocument.create();
+                    
+                    for (const file of selectedFiles) {
+                        const arrayBuffer = await file.arrayBuffer();
+                        const pdf = await PDFLib.PDFDocument.load(arrayBuffer);
+                        const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+                        copiedPages.forEach((page) => mergedPdf.addPage(page));
+                    }
+                    
+                    const pdfBytes = await mergedPdf.save();
+                    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                    const url = URL.createObjectURL(blob);
+                    
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'merged_document.pdf';
+                    a.click();
+                    
+                    hideLoading();
+                    showToast('PDFs merged successfully!', 'success');
+                } catch (error) {
+                    hideLoading();
+                    showToast('PDF merge failed: ' + error.message, 'error');
+                }
+            });
+        }
+
+        // JPG to PDF Converter
+        function initJpgToPdf() {
+            const input = document.getElementById('jpgToPdfInput');
+            const btn = document.getElementById('convertJpgToPdfBtn');
+            const selectedDiv = document.getElementById('selectedImages');
+            let selectedImages = [];
+            
+            input.addEventListener('change', (e) => {
+                selectedImages = Array.from(e.target.files);
+                btn.disabled = !selectedImages.length;
+                
+                selectedDiv.innerHTML = selectedImages.map((file, index) => {
+                    const url = URL.createObjectURL(file);
+                    return `
+                        <div class="relative">
+                            <img src="${url}" class="w-full h-20 object-cover rounded border">
+                            <button onclick="removeSelectedImage(${index})" class="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    `;
+                }).join('');
+            });
+            
+            btn.addEventListener('click', async () => {
+                if (!selectedImages.length) return;
+                
+                showLoading();
+                try {
+                    const { jsPDF } = window.jspdf;
+                    const pdf = new jsPDF();
+                    
+                    for (let i = 0; i < selectedImages.length; i++) {
+                        const file = selectedImages[i];
+                        const img = new Image();
+                        img.crossOrigin = 'anonymous';
+                        
+                        await new Promise((resolve) => {
+                            img.onload = () => {
+                                const canvas = document.createElement('canvas');
+                                const ctx = canvas.getContext('2d');
+                                canvas.width = img.width;
+                                canvas.height = img.height;
+                                ctx.drawImage(img, 0, 0);
+                                
+                                const imgData = canvas.toDataURL('image/jpeg', 0.8);
+                                
+                                if (i > 0) pdf.addPage();
+                                
+                                const pdfWidth = pdf.internal.pageSize.getWidth();
+                                const pdfHeight = pdf.internal.pageSize.getHeight();
+                                const imgAspectRatio = img.width / img.height;
+                                const pdfAspectRatio = pdfWidth / pdfHeight;
+                                
+                                let renderWidth, renderHeight;
+                                if (imgAspectRatio > pdfAspectRatio) {
+                                    renderWidth = pdfWidth;
+                                    renderHeight = pdfWidth / imgAspectRatio;
+                                } else {
+                                    renderHeight = pdfHeight;
+                                    renderWidth = pdfHeight * imgAspectRatio;
+                                }
+                                
+                                const x = (pdfWidth - renderWidth) / 2;
+                                const y = (pdfHeight - renderHeight) / 2;
+                                
+                                pdf.addImage(imgData, 'JPEG', x, y, renderWidth, renderHeight);
+                                resolve();
+                            };
+                            img.src = URL.createObjectURL(file);
+                        });
+                    }
+                    
+                    pdf.save('images_to_pdf.pdf');
+                    hideLoading();
+                    showToast('Images converted to PDF successfully!', 'success');
+                } catch (error) {
+                    hideLoading();
+                    showToast('Conversion failed: ' + error.message, 'error');
+                }
+            });
+        }
+
+        // Signature Resizer
+        function initSignatureResizer() {
+            const input = document.getElementById('signatureInput');
+            const btn = document.getElementById('resizeSignatureBtn');
+            const widthInput = document.getElementById('signatureWidth');
+            const heightInput = document.getElementById('signatureHeight');
+            const preview = document.getElementById('signaturePreview');
+            
+            input.addEventListener('change', (e) => {
+                btn.disabled = !e.target.files.length;
+            });
+            
+            btn.addEventListener('click', async () => {
+                const file = input.files[0];
+                const width = parseInt(widthInput.value);
+                const height = parseInt(heightInput.value);
+                
+                if (!file || !width || !height) return;
+                
+                showLoading();
+                try {
+                    const img = new Image();
+                    img.crossOrigin = 'anonymous';
+                    
+                    await new Promise((resolve) => {
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+                            canvas.width = width;
+                            canvas.height = height;
+                            
+                            ctx.drawImage(img, 0, 0, width, height);
+                            
+                            canvas.toBlob((blob) => {
+                                const url = URL.createObjectURL(blob);
+                                preview.innerHTML = `
+                                    <div class="space-y-4">
+                                        <img src="${url}" class="max-w-full border rounded" style="max-height: 200px;">
+                                        <a href="${url}" download="resized_signature.png" class="inline-block bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                                            <i class="fas fa-download mr-2"></i>Download Resized Signature
+                                        </a>
+                                    </div>
+                                `;
+                                preview.classList.remove('hidden');
+                                resolve();
+                            });
+                        };
+                        img.src = URL.createObjectURL(file);
+                    });
+                    
+                    hideLoading();
+                    showToast('Signature resized successfully!', 'success');
+                } catch (error) {
+                    hideLoading();
+                    showToast('Resize failed: ' + error.message, 'error');
+                }
+            });
+        }
+
+        // Background Remover (Simplified)
+        function initBackgroundRemover() {
+            const input = document.getElementById('removeBgInput');
+            const btn = document.getElementById('removeBgBtn');
+            const result = document.getElementById('bgRemoveResult');
+            
+            input.addEventListener('change', (e) => {
+                btn.disabled = !e.target.files.length;
+            });
+            
+            btn.addEventListener('click', async () => {
+                const file = input.files[0];
+                if (!file) return;
+                
+                showLoading();
+                try {
+                    const img = new Image();
+                    img.crossOrigin = 'anonymous';
+                    
+                    await new Promise((resolve) => {
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+                            canvas.width = img.width;
+                            canvas.height = img.height;
+                            
+                            // Draw original image
+                            ctx.drawImage(img, 0, 0);
+                            
+                            // Simple background removal (replace with white)
+                            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                            const data = imageData.data;
+                            
+                            for (let i = 0; i < data.length; i += 4) {
+                                const r = data[i];
+                                const g = data[i + 1];
+                                const b = data[i + 2];
+                                
+                                // Simple white background detection
+                                if (r > 240 && g > 240 && b > 240) {
+                                    data[i + 3] = 0; // Make transparent
+                                }
+                            }
+                            
+                            ctx.putImageData(imageData, 0, 0);
+                            
+                            const originalUrl = URL.createObjectURL(file);
+                            const processedUrl = canvas.toDataURL('image/png');
+                            
+                            document.getElementById('originalImage').src = originalUrl;
+                            document.getElementById('processedImage').src = processedUrl;
+                            
+                            result.classList.remove('hidden');
+                            resolve();
+                        };
+                        img.src = URL.createObjectURL(file);
+                    });
+                    
+                    hideLoading();
+                    showToast('Background removed successfully!', 'success');
+                } catch (error) {
+                    hideLoading();
+                    showToast('Background removal failed: ' + error.message, 'error');
+                }
+            });
+        }
+
+        // Form Filler
+        function initFormFiller() {
+            const saveBtn = document.getElementById('saveFormData');
+            const loadBtn = document.getElementById('loadFormData');
+            const clearBtn = document.getElementById('clearFormData');
+            
+            saveBtn.addEventListener('click', () => {
+                const formData = {
+                    name: document.getElementById('formName').value,
+                    aadhaar: document.getElementById('formAadhaar').value,
+                    voterId: document.getElementById('formVoterId').value,
+                    mobile: document.getElementById('formMobile').value,
+                    address: document.getElementById('formAddress').value,
+                    dob: document.getElementById('formDob').value
+                };
+                
+                localStorage.setItem('formFillerData', JSON.stringify(formData));
+                showToast('Form data saved successfully!', 'success');
+            });
+            
+            loadBtn.addEventListener('click', () => {
+                const savedData = localStorage.getItem('formFillerData');
+                if (savedData) {
+                    const formData = JSON.parse(savedData);
+                    document.getElementById('formName').value = formData.name || '';
+                    document.getElementById('formAadhaar').value = formData.aadhaar || '';
+                    document.getElementById('formVoterId').value = formData.voterId || '';
+                    document.getElementById('formMobile').value = formData.mobile || '';
+                    document.getElementById('formAddress').value = formData.address || '';
+                    document.getElementById('formDob').value = formData.dob || '';
+                    showToast('Form data loaded successfully!', 'success');
+                } else {
+                    showToast('No saved data found!', 'warning');
+                }
+            });
+            
+            clearBtn.addEventListener('click', () => {
+                if (confirm('Are you sure you want to clear all form data?')) {
+                    document.getElementById('formName').value = '';
+                    document.getElementById('formAadhaar').value = '';
+                    document.getElementById('formVoterId').value = '';
+                    document.getElementById('formMobile').value = '';
+                    document.getElementById('formAddress').value = '';
+                    document.getElementById('formDob').value = '';
+                    showToast('Form data cleared!', 'success');
+                }
+            });
+            
+            // Auto-load saved data on initialization
+            loadBtn.click();
+        }
+
+        // AI Chatbot
+        const chatToggle = document.getElementById('chatToggle');
+        const chatWindow = document.getElementById('chatWindow');
+        const chatClose = document.getElementById('chatClose');
+        const chatInput = document.getElementById('chatInput');
+        const chatSend = document.getElementById('chatSend');
+        const chatMessages = document.getElementById('chatMessages');
+
+        chatToggle.addEventListener('click', () => {
+            chatWindow.classList.toggle('hidden');
+        });
+
+        chatClose.addEventListener('click', () => {
+            chatWindow.classList.add('hidden');
+        });
+
+        chatSend.addEventListener('click', sendChatMessage);
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendChatMessage();
+        });
+
+        function sendChatMessage() {
+            const message = chatInput.value.trim();
+            if (!message) return;
+            
+            // Add user message
+            addChatMessage(message, 'user');
+            chatInput.value = '';
+            
+            // Simulate AI response
+            setTimeout(() => {
+                const response = generateAIResponse(message);
+                addChatMessage(response, 'ai');
+            }, 1000);
+        }
+
+        function addChatMessage(message, sender) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `chat-bubble ${sender === 'user' ? 'bg-blue-100 dark:bg-blue-900 ml-8' : 'bg-gray-100 dark:bg-gray-700 mr-8'} p-3 rounded-lg`;
+            messageDiv.innerHTML = `<p class="text-sm text-gray-800 dark:text-gray-200">${message}</p>`;
+            
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function generateAIResponse(message) {
+            const responses = {
+                'aadhaar': 'To verify an Aadhaar card, upload the image using the Aadhaar Tools tab. Use OCR to extract text and run the AI validity checker to detect potential fakes.',
+                'verify': 'You can verify documents by uploading them in the Aadhaar Tools section. The system will extract text using OCR and check validity using AI.',
+                'mark': 'To mark a person as done, go to the Marked People tab, find the person in the list, and update their status to "Verified".',
+                'fake': 'If an Aadhaar appears fake, the AI checker will flag it as "Suspicious" or "Fake". Look for blurry images, repeated patterns, or invalid number formats.',
+                'export': 'You can export your marked people data as CSV from the Marked People tab using the Export button.',
+                'tools': 'Extra tools include PDF compression, merging, image conversion, signature resizing, and background removal. Access them from the Extra Tools tab.',
+                'storage': 'You have 10GB of storage space. Monitor usage in the dashboard. Delete old files if you\'re running low on space.',
+                'help': 'I can help with Aadhaar verification, people management, document tools, and general BLO duties. What specific task do you need help with?'
+            };
+            
+            const lowerMessage = message.toLowerCase();
+            for (const [key, response] of Object.entries(responses)) {
+                if (lowerMessage.includes(key)) {
+                    return response;
+                }
+            }
+            
+            return 'I\'m here to help with BLO tasks! You can ask me about Aadhaar verification, marking people, using tools, or any other BLO-related questions.';
+        }
+
+        // Initialize the application
+        function initApp() {
+            initTheme();
+            
+            // Load marked people data
+            renderPeopleTable();
+            
+            // Set up drag and drop for file uploads
+            setupDragAndDrop();
+            
+            // Initialize service worker for PWA
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/sw.js').catch(console.error);
+            }
+        }
+
+        function setupDragAndDrop() {
+            const dropZones = document.querySelectorAll('[class*="border-dashed"]');
+            
+            dropZones.forEach(zone => {
+                zone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    zone.classList.add('border-blue-500', 'bg-blue-50');
+                });
+                
+                zone.addEventListener('dragleave', (e) => {
+                    e.preventDefault();
+                    zone.classList.remove('border-blue-500', 'bg-blue-50');
+                });
+                
+                zone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    zone.classList.remove('border-blue-500', 'bg-blue-50');
+                    
+                    const files = Array.from(e.dataTransfer.files);
+                    const input = zone.querySelector('input[type="file"]');
+                    if (input && files.length) {
+                        const dt = new DataTransfer();
+                        files.forEach(file => dt.items.add(file));
+                        input.files = dt.files;
+                        input.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                });
+            });
+        }
+
+        // Start the application
+        initApp();
+    </script>
+</body>
+</html>
